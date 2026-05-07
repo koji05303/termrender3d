@@ -35,6 +35,7 @@ The engine is encapsulated in three core files:
 * `mvp_re_engine.py`: The main entry point. Handles OBJ parsing, MVP matrix transformations, near-plane Sutherland-Hodgman clipping, and CPU multiprocessing scheduling.
 * `cuda_engine.py`: The Taichi-powered GPU backend. Handles VRAM memory allocation and massively parallel rasterization kernels.
 * `braille_art.py`: The display driver. Handles the conversion of 2D pixel arrays into Unicode Braille patterns and ANSI color sequences.
+* `bayer_pattern.py`: A utility for converting images to ASCII art using Bayer dithering.
 
 ## Installation
 
@@ -42,7 +43,9 @@ Ensure you have Python 3.8+ installed.
 
 ## OBJ File For Test
 
-U can find all files in [obj_list] on [text](https://free3d.com/zh/3d-models/obj)
+You can find compatible OBJ models on [Free3D](https://free3d.com/zh/3d-models/obj).
+
+### Installation
 
 ```bash
 # Basic dependencies
@@ -50,20 +53,49 @@ pip install numpy
 
 # Required for GPU backend (Highly Recommended)
 pip install taichi
+```
 
-Usage Examples1. 3D Model RenderingBash# GPU Accelerated Mode (Recommended)
+### Usage Example
+
+1. 3D Model Rendering
+```bash
+# GPU Accelerated Mode (Recommended)
 python mvp_re_engine.py models/agera.obj --backend gpu --color --interactive
 
 # CPU Multi-core Mode
 python mvp_re_engine.py models/agera.obj --backend cpu --workers 44 --color
-2. Video & Webcam StreamingBash# Video to Braille
+```
+
+2. Video & Webcam Streaming
+```bash
+# Video to Braille
 python braille_art.py --file video.mp4 --fps 24 --color
 
 # Live Webcam to Braille
 python braille_art.py --camera 0 --fps 30 --color --mirror
-3. Static Image ConversionBash# Image to Braille
+```
+
+3. Static Image Conversion
+```bash
+# Image to Braille
 python braille_art.py --image photo.jpg --dither bayer8 --color
 
 # Image to ASCII (with auto-resize)
 python bayer_pattern.py photo.jpg --watch
-Technical SpecificationsFeatureSpecificationMatrix OperationsModel, View (Look-At), Perspective ProjectionClipping AlgorithmSutherland-Hodgman (Near-Plane)Lighting ModelsFlat, Lambert, PhongInterpolationPerspective-Correct (1/W) for attributes, Linear for DepthInput FormatsOBJ, JPG, PNG, MP4, Webcam (V4L2)Output ProtocolANSI X3.64 / ECMA-48 (24-bit TrueColor)Author: Li-Wei JiangLicense: MIT
+```
+
+### Technical Specifications
+
+| Feature | Specification |
+|---------|---------------|
+| Matrix Operations | Model, View (Look-At), Perspective Projection |
+| Clipping Algorithm | Sutherland-Hodgman (Near-Plane) |
+| Lighting Models | Flat, Lambert, Phong |
+| Interpolation | Perspective-Correct (1/W) for attributes, Linear for Depth |
+| Input Formats | OBJ, JPG, PNG, MP4, Webcam (V4L2) |
+| Output Protocol | ANSI X3.64 / ECMA-48 (24-bit TrueColor) |
+
+
+Author: Li-Wei Jiang
+
+License: MIT
