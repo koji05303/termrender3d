@@ -37,12 +37,6 @@ For the optional CUDA / Taichi 3D backend:
 pip install taichi
 ```
 
-If you are using the local conda setup for this project:
-
-```bash
-conda activate yolo
-```
-
 ## Unified CLI
 
 <p align="center">
