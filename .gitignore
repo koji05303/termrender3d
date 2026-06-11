@@ -2,4 +2,3 @@ input_file_test/
 __pycache__/
 *.pyc
 .vscode/
-output/
