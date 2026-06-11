@@ -45,6 +45,11 @@ conda activate yolo
 
 ## Unified CLI
 
+<p align="center">
+  <img src="output/chad.png" width="48%" alt="TermRender ASCII output preview">
+  <img src="output/test-2.png" width="48%" alt="TermRender Braille output preview">
+</p>
+
 Use `termrender.py` as the main entry point.
 
 ```bash
