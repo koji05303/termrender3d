@@ -1,100 +1,160 @@
-# TermRender3D
+# TermRender
 
-A high-performance 3D software rasterizer written in Python that renders standard OBJ models directly to the terminal using 24-bit TrueColor Braille characters. 
+Render images, videos, and webcam frames directly in the terminal.
 
-The engine implements a dual-backend architecture, utilizing Tile-Based Rendering (TBR) for multi-core CPUs and a Visibility Buffer approach for CUDA-enabled GPUs, pushing the limits of terminal-based graphics.
+TermRender provides a small unified CLI over the existing ASCII and Unicode Braille renderers. It can display still images, stream video files, and preview live camera input without leaving your shell.
 
 <p align="center">
   <img src="output/agera.gif" width="1000" alt="TermRender GPU Backend Demo">
   <img src="output/skull.gif" width="1000" alt="TermRender GPU Backend Demo">
 </p>
 
-## Architecture & Features
+## Supported
 
-This project does not rely on OpenGL, DirectX, or Vulkan. The entire graphics pipeline (MVP transformations, clipping, barycentric interpolation, and rasterization) is implemented from scratch.
+- ASCII rendering
+- Unicode Braille rendering
+- 24-bit color Braille rendering
+- Image input
+- Video file input
+- Webcam / camera input
+- Width control for terminal-sized output
+- Braille threshold and dithering controls
+- Optional mirror mode for camera-style previews
+- Legacy standalone scripts for ASCII and Braille
+- Advanced OBJ rendering through the original CPU / CUDA 3D engine
 
-### 1. GPU Backend (Taichi CUDA)
-- **Visibility Buffer**: Packs 32-bit physical depth and 32-bit triangle indices into a single `uint64`. Solves Z-buffer race conditions natively using atomic operations (`ti.atomic_min`).
-- **Deferred Shading**: Lighting and barycentric coordinates are only evaluated for the strictly visible pixels, achieving zero overdraw.
-- **JIT Compilation**: Powered by `taichi`, compiling Python functions directly into optimized CUDA machine code at runtime.
+## Install
 
-### 2. CPU Backend (Software TBR)
-- **Tile-Based Rendering**: Divides the screen into independent tiles for lock-free parallel rasterization across multiple CPU cores.
-- **Zero-Copy IPC**: Utilizes `multiprocessing.shared_memory` to pass geometric indices between processes, eliminating serialization overhead.
-- **Precision**: Uses `float64` for edge function evaluations to prevent clipping tearing and coordinate overflow at extreme zoom levels.
-
-### 3. Terminal Output Layer
-- **High-Density Braille**: Maps $2 \times 4$ sub-pixel grids to Unicode Braille characters (`U+2800` to `U+28FF`).
-- **ANSI TrueColor**: Calculates the average RGB value of active sub-pixels for precise 24-bit color output.
-- **Tear-Free Rendering**: Uses low-level `os.write` and ANSI cursor positioning (`\033[H`) to bypass standard output buffering issues.
-
-## Project Structure
-
-The engine is encapsulated in three core files:
-
-* `mvp_re_engine.py`: The main entry point. Handles OBJ parsing, MVP matrix transformations, near-plane Sutherland-Hodgman clipping, and CPU multiprocessing scheduling.
-* `cuda_engine.py`: The Taichi-powered GPU backend. Handles VRAM memory allocation and massively parallel rasterization kernels.
-* `braille_art.py`: The display driver. Handles the conversion of 2D pixel arrays into Unicode Braille patterns and ANSI color sequences.
-* `bayer_pattern.py`: A utility for converting images to ASCII art using Bayer dithering.
-
-## Installation
-
-Ensure you have Python 3.8+ installed. 
-
-## OBJ File For Test
-
-You can find compatible OBJ models on [Free3D](https://free3d.com/zh/3d-models/obj).
-
-### Installation
+Python 3.8+ is recommended.
 
 ```bash
-# Basic dependencies
-pip install numpy
+pip install pillow numpy opencv-python
+```
 
-# Required for GPU backend (Highly Recommended)
+For the optional CUDA / Taichi 3D backend:
+
+```bash
 pip install taichi
 ```
 
-### Usage Example
+If you are using the local conda setup for this project:
 
-1. 3D Model Rendering
 ```bash
-# GPU Accelerated Mode (Recommended)
-python mvp_re_engine.py models/agera.obj --backend gpu --color --interactive
-
-# CPU Multi-core Mode
-python mvp_re_engine.py models/agera.obj --backend cpu --workers 44 --color
+conda activate yolo
 ```
 
-2. Video & Webcam Streaming
+## Unified CLI
+
+Use `termrender.py` as the main entry point.
+
+```bash
+python termrender.py --help
+```
+
+### Images
+
+```bash
+# Image to ASCII
+python termrender.py image photo.jpg --mode ascii
+
+# Image to Unicode Braille
+python termrender.py image photo.jpg --mode braille
+
+# Image to 24-bit color Braille
+python termrender.py image photo.jpg --mode braille --color
+
+# Braille with dithering and fixed max width
+python termrender.py image photo.jpg --mode braille --dither bayer8 --width 120
+```
+
+### Video
+
 ```bash
 # Video to Braille
-python braille_art.py --file video.mp4 --fps 24 --color
+python termrender.py video clip.mp4 --mode braille
 
-# Live Webcam to Braille
+# Color Braille video at a target FPS
+python termrender.py video clip.mp4 --mode braille --color --fps 24
+
+# Video to ASCII
+python termrender.py video clip.mp4 --mode ascii --width 100
+```
+
+### Camera
+
+```bash
+# Camera 0 to Braille
+python termrender.py camera 0 --mode braille
+
+# Mirrored color camera preview
+python termrender.py camera 0 --mode braille --color --mirror
+
+# Camera preview in ASCII
+python termrender.py camera 0 --mode ascii --width 100 --mirror
+```
+
+## CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `--mode {ascii,braille}` | Rendering backend. Defaults to `braille`. |
+| `--width WIDTH` | Maximum terminal output width. |
+| `--workers WORKERS` | Worker process count for ASCII rendering. |
+| `--threshold VALUE` | Braille threshold from `0` to `255`. Defaults to `127`. |
+| `--dither MODE` | Braille dithering mode: `bayer4`, `bayer8`, `threshold`, or `floyd-steinberg`. |
+| `--color` | Enable 24-bit TrueColor Braille output. |
+| `--mirror` | Mirror the frame horizontally. Useful for webcam previews. |
+| `--fps FPS` | Target FPS for video and camera streams. Defaults to `30`. |
+
+## Legacy Entry Points
+
+The original scripts still work and remain useful for direct backend testing.
+
+```bash
+# Standalone image-to-ASCII renderer
+python bayer_pattern.py photo.jpg --watch
+
+# Standalone image-to-Braille renderer
+python braille_art.py --image photo.jpg --dither bayer8 --color
+
+# Standalone video / webcam Braille renderer
+python braille_art.py --file video.mp4 --fps 24 --color
 python braille_art.py --camera 0 --fps 30 --color --mirror
 ```
 
-3. Static Image Conversion
-```bash
-# Image to Braille
-python braille_art.py --image photo.jpg --dither bayer8 --color
+## 3D OBJ Renderer
 
-# Image to ASCII (with auto-resize)
-python bayer_pattern.py photo.jpg --watch
+The repository also includes the original terminal 3D rasterizer for OBJ models.
+
+It does not rely on OpenGL, DirectX, or Vulkan. The graphics pipeline is implemented in Python, including MVP transforms, near-plane clipping, barycentric interpolation, and terminal output.
+
+```bash
+# GPU accelerated mode
+python mvp_re_engine.py obj_list/agera.obj --backend gpu --color --interactive
+
+# CPU multi-core mode
+python mvp_re_engine.py obj_list/agera.obj --backend cpu --workers 44 --color
 ```
 
-### Technical Specifications
+### 3D Backend Notes
+
+- `mvp_re_engine.py`: OBJ parsing, MVP transforms, clipping, and CPU multiprocessing scheduling.
+- `cuda_engine.py`: Taichi CUDA backend with visibility-buffer rasterization.
+- `braille_art.py`: Unicode Braille and ANSI TrueColor terminal output helpers.
+- `bayer_pattern.py`: ASCII frame rendering backend.
+- `termrender.py`: Unified image / video / camera CLI.
+
+## Technical Notes
 
 | Feature | Specification |
 |---------|---------------|
-| Matrix Operations | Model, View (Look-At), Perspective Projection |
-| Clipping Algorithm | Sutherland-Hodgman (Near-Plane) |
-| Lighting Models | Flat, Lambert, Phong |
-| Interpolation | Perspective-Correct (1/W) for attributes, Linear for Depth |
-| Input Formats | OBJ, JPG, PNG, MP4, Webcam (V4L2) |
-| Output Protocol | ANSI X3.64 / ECMA-48 (24-bit TrueColor) |
-
+| Text modes | ASCII, Unicode Braille |
+| Color output | ANSI 24-bit TrueColor for Braille |
+| Input formats | Images, videos, webcams, OBJ models |
+| Image backend | Pillow |
+| Video / camera backend | OpenCV |
+| 3D GPU backend | Taichi CUDA |
+| Terminal protocol | ANSI escape sequences |
 
 Author: Li-Wei Jiang
 
