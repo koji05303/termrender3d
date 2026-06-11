@@ -103,6 +103,26 @@ def rgb_bytes_to_ascii(rgb_bytes, width, height, output_columns, output_rows):
     return "\n".join(output_lines)
 
 
+def frame_to_rgb_bytes(frame):
+    if isinstance(frame, Image.Image):
+        rgb_image = ImageOps.exif_transpose(frame).convert("RGB")
+        width, height = rgb_image.size
+        return rgb_image.tobytes(), width, height
+
+    if hasattr(frame, "ndim") and hasattr(frame, "shape"):
+        if frame.ndim == 2:
+            rgb_image = Image.fromarray(frame).convert("RGB")
+            width, height = rgb_image.size
+            return rgb_image.tobytes(), width, height
+
+        if frame.ndim == 3 and frame.shape[2] in (3, 4):
+            height, width = frame.shape[:2]
+            rgb_frame = frame[:, :, 2::-1]
+            return rgb_frame.tobytes(), width, height
+
+    raise TypeError("frame must be a PIL image or an OpenCV-style uint8 frame")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="將圖片轉成終端 ASCII Art")
     parser.add_argument("image", help="要轉成 ASCII Art 的圖片路徑")
@@ -170,12 +190,22 @@ def process_strip(args):
 # ==========================================
 # 3. 主排程器 (交通指揮官)
 # ==========================================
-def render_rgb_to_ascii(rgb_bytes, width, height, output_columns, output_rows, num_workers=None):
+def render_rgb_to_ascii_text(rgb_bytes, width, height, output_columns, output_rows, num_workers=None):
     if num_workers is None:
         num_workers = mp.cpu_count()
+    num_workers = max(1, int(num_workers))
 
     scale_w = max(1, math.ceil(width / output_columns))
     scale_h = max(1, math.ceil(height / output_rows))
+
+    if num_workers == 1:
+        return rgb_bytes_to_ascii(
+            rgb_bytes,
+            width,
+            height,
+            output_columns=output_columns,
+            output_rows=output_rows,
+        )
 
     max_workers_by_rows = max(1, math.ceil(height / scale_h))
     num_workers = min(num_workers, max_workers_by_rows)
@@ -209,13 +239,43 @@ def render_rgb_to_ascii(rgb_bytes, width, height, output_columns, output_rows, n
 
         # 將所有核心的結果按順序拼接
         final_output = "\n".join(results)
-
-        # 清空畫面並輸出
-        print("\033[H\033[J", end="")
-        print(final_output)
+        return final_output
     finally:
         shm.close()
         shm.unlink()
+
+
+def render_rgb_to_ascii(rgb_bytes, width, height, output_columns, output_rows, num_workers=None):
+    final_output = render_rgb_to_ascii_text(
+        rgb_bytes,
+        width,
+        height,
+        output_columns=output_columns,
+        output_rows=output_rows,
+        num_workers=num_workers,
+    )
+    print("\033[H\033[J", end="")
+    print(final_output)
+    return final_output
+
+
+def render_ascii_frame(frame, max_width=None, workers=None) -> str:
+    rgb_bytes, width, height = frame_to_rgb_bytes(frame)
+    terminal_size = get_terminal_size()
+    output_columns, output_rows = calculate_output_grid(
+        width,
+        height,
+        terminal_size,
+        max_width=max_width,
+    )
+    return render_rgb_to_ascii_text(
+        rgb_bytes,
+        width,
+        height,
+        output_columns=output_columns,
+        output_rows=output_rows,
+        num_workers=workers,
+    )
 
 
 def render_image_to_terminal(rgb_bytes, width, height, max_width=None, num_workers=None):
