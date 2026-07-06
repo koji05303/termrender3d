@@ -30,7 +30,7 @@ import multiprocessing as mp
 import signal
 import shutil
 import threading
-from multiprocessing import shared_memory
+from multiprocessing import resource_tracker, shared_memory
 import sys
 
 from PIL import Image, ImageOps
@@ -38,6 +38,13 @@ from PIL import Image, ImageOps
 CHARSET = " .:-=+*#%@"
 CHAR_HEIGHT_RATIO = 2.0
 TERMINAL_ROW_PADDING = 1
+
+
+def unregister_worker_shared_memory(shm):
+    try:
+        resource_tracker.unregister(shm._name, "shared_memory")
+    except (AttributeError, KeyError, ValueError):
+        pass
 
 
 def positive_int(value):
@@ -158,6 +165,7 @@ def process_strip(args):
     output_lines = []
 
     shm = shared_memory.SharedMemory(name=shm_name)
+    unregister_worker_shared_memory(shm)
     try:
         mv = shm.buf
 
@@ -190,7 +198,33 @@ def process_strip(args):
 # ==========================================
 # 3. 主排程器 (交通指揮官)
 # ==========================================
-def render_rgb_to_ascii_text(rgb_bytes, width, height, output_columns, output_rows, num_workers=None):
+def create_ascii_pool(num_workers=None):
+    if num_workers is None:
+        num_workers = mp.cpu_count()
+    num_workers = max(1, int(num_workers))
+    if num_workers == 1:
+        return None
+    return mp.Pool(processes=num_workers)
+
+
+def resolve_pool_worker_count(pool, fallback=None):
+    if fallback is not None:
+        return fallback
+    if pool is not None:
+        return getattr(pool, "_processes", None)
+    return None
+
+
+def render_rgb_to_ascii_text(
+    rgb_bytes,
+    width,
+    height,
+    output_columns,
+    output_rows,
+    num_workers=None,
+    pool=None,
+):
+    num_workers = resolve_pool_worker_count(pool, fallback=num_workers)
     if num_workers is None:
         num_workers = mp.cpu_count()
     num_workers = max(1, int(num_workers))
@@ -233,8 +267,10 @@ def render_rgb_to_ascii_text(rgb_bytes, width, height, output_columns, output_ro
             for start_y, end_y in strip_ranges
         ]
 
-        # 啟動多進程池
-        with mp.Pool(processes=num_workers) as pool:
+        if pool is None:
+            with mp.Pool(processes=num_workers) as owned_pool:
+                results = owned_pool.map(process_strip, tasks)
+        else:
             results = pool.map(process_strip, tasks)
 
         # 將所有核心的結果按順序拼接
@@ -259,7 +295,7 @@ def render_rgb_to_ascii(rgb_bytes, width, height, output_columns, output_rows, n
     return final_output
 
 
-def render_ascii_frame(frame, max_width=None, workers=None) -> str:
+def render_ascii_frame(frame, max_width=None, workers=None, pool=None) -> str:
     rgb_bytes, width, height = frame_to_rgb_bytes(frame)
     terminal_size = get_terminal_size()
     output_columns, output_rows = calculate_output_grid(
@@ -275,6 +311,7 @@ def render_ascii_frame(frame, max_width=None, workers=None) -> str:
         output_columns=output_columns,
         output_rows=output_rows,
         num_workers=workers,
+        pool=pool,
     )
 
 
